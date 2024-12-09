@@ -1,51 +1,51 @@
-#include <SPI.h>
-#include <MFRC522.h>
+#include <Wire.h>
+#include <Adafruit_PN532.h>
 
-#define SS_PIN 5
-#define RST_PIN 0
+// Pin SDA dan SCL untuk ESP32 (standar I²C pin)
+#define SDA_PIN 21
+#define SCL_PIN 22
 
-MFRC522 rfid(SS_PIN, RST_PIN);
+// Inisialisasi PN532 menggunakan I²C
+Adafruit_PN532 nfc(SDA_PIN, SCL_PIN);
 
 void setup() {
-    Serial.begin(115200);
-    Serial.println("Starting setup...");
-    delay(100); // Add a delay to ensure system stability
-    SPI.begin();
-    Serial.println("SPI initialized.");
-    rfid.PCD_Init();
-    if (rfid.PCD_PerformSelfTest()) {
-        Serial.println("RFID reader initialized successfully.");
-    } else {
-        Serial.println("RFID reader initialization failed.");
-    }
+  Serial.begin(115200);
+  Wire.begin(SDA_PIN, SCL_PIN); // Inisialisasi I²C
+
+  Serial.println("Inisialisasi modul PN532...");
+
+  if (!nfc.begin()) {
+    Serial.println("Gagal mendeteksi modul PN532. Periksa koneksi Anda!");
+    while (1); // Berhenti jika modul tidak terdeteksi
+  }
+
+  // Set mode untuk membaca kartu NFC
+  nfc.SAMConfig();
+  Serial.println("PN532 siap! Tempelkan kartu NFC Anda.");
 }
 
 void loop() {
-    Serial.println("Checking for new card...");
-    if (!rfid.PICC_IsNewCardPresent()) {
-        Serial.println("No new card present.");
-        while (!rfid.PICC_IsNewCardPresent()) {
-            // Wait until a new card is detected
-        }
-        MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
-        Serial.println("New card detected.");
-    }
-    
+  uint8_t success;
+  uint8_t uid[7]; // Array untuk menyimpan UID
+  uint8_t uidLength;
 
-    if (!rfid.PICC_ReadCardSerial()) {
-        Serial.println("Failed to read card serial.");
-        delay(100); // Increase delay to give more time for reading
-        return;
-    }
-    Serial.println("Card serial read successfully.");
+  // Cek apakah ada kartu yang terdeteksi
+  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
 
-    Serial.print("Card UID: ");
-    for (byte i = 0; i < rfid.uid.size; i++) {
-        Serial.print(rfid.uid.uidByte[i] < 0x10 ? " 0" : " ");
-        Serial.print(rfid.uid.uidByte[i], HEX);
+  if (success) {
+    Serial.println("Kartu terdeteksi!");
+
+    // Tampilkan UID kartu
+    Serial.print("UID: ");
+    for (uint8_t i = 0; i < uidLength; i++) {
+      Serial.print(uid[i], HEX);
+      if (i < uidLength - 1) {
+        Serial.print(":");
+      }
     }
     Serial.println();
-    Serial.println("RFID card scanned successfully!");
 
-    rfid.PICC_HaltA();
+    // Tunggu sebentar sebelum membaca kartu berikutnya
+    delay(2000);
+  }
 }
