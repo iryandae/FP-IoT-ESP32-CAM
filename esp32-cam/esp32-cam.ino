@@ -3,18 +3,17 @@
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "Base64.h"
-
 #include "esp_camera.h"
 
-const char* ssid     = "WIFI";   //your network SSID
-const char* password = "PASSWORD";   //your network password
+const char* ssid     = "Ibu yang Luhur ITS";   //your network SSID
+const char* password = "5027231025";          //your network password
 const char* myDomain = "script.google.com";
-String myScript = "https://script.google.com/macros/s/AKfycbyvjumWB8ioxsJGyRL6nzFANWOxTq6R0rbTHYYn08WXKlBSQZbMcv4Gvp1Yo9uOKBcO/exec";    //Replace with your own url
+String myScript = "https://script.google.com/macros/s/AKfycbyvjumWB8ioxsJGyRL6nzFANWOxTq6R0rbTHYYn08WXKlBSQZbMcv4Gvp1Yo9uOKBcO/exec"; //Replace with your own url
 String myFilename = "filename=ESP32-CAM.jpg"; // Folder Name
 String mimeType = "&mimetype=image/jpeg";
 String myImage = "&data=";
 
-int waitingTime = 30000; //Wait 30 seconds to google response.
+int waitingTime = 10000; //Wait 30 seconds to google response.
 
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
@@ -34,8 +33,9 @@ int waitingTime = 30000; //Wait 30 seconds to google response.
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
 
-void setup()
-{
+#define LED_FLASH_PIN      4 // Pin LED flash
+
+void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   
   Serial.begin(115200);
@@ -90,16 +90,17 @@ void setup()
     delay(1000);
     ESP.restart();
   }
+
+  // Initialize LED flash
+  pinMode(LED_FLASH_PIN, OUTPUT);
+  digitalWrite(LED_FLASH_PIN, LOW); // Ensure LED is off
 }
 
 boolean enviar = true;
 
 void loop() {
-  //if(enviar) {
-    saveCapturedImage();
-    enviar = false;
-    delay(60000);
-  //}
+  saveCapturedImage();
+  delay(60000); // Delay 1 minute before next capture
 }
 
 void saveCapturedImage() {
@@ -111,22 +112,30 @@ void saveCapturedImage() {
     Serial.println("Connection successful");
     
     camera_fb_t * fb = NULL;
+
+    // Turn on LED flash
+    digitalWrite(LED_FLASH_PIN, HIGH);
+    delay(100); // Allow time for LED to stabilize
+
     fb = esp_camera_fb_get();  
-    if(!fb) {
+    if (!fb) {
       Serial.println("Camera capture failed");
       delay(1000);
       ESP.restart();
       return;
     }
+
+    // Turn off LED flash
+    digitalWrite(LED_FLASH_PIN, LOW);
   
     char *input = (char *)fb->buf;
     char output[base64_enc_len(3)];
     String imageFile = "";
-    for (int i=0;i<fb->len;i++) {
+    for (int i=0; i<fb->len; i++) {
       base64_encode(output, (input++), 3);
-      if (i%3==0) imageFile += urlencode(String(output));
+      if (i % 3 == 0) imageFile += urlencode(String(output));
     }
-    String Data = myFilename+mimeType+myImage;
+    String Data = myFilename + mimeType + myImage;
     
     esp_camera_fb_return(fb);
     
@@ -134,25 +143,24 @@ void saveCapturedImage() {
     
     client.println("POST " + myScript + " HTTP/1.1");
     client.println("Host: " + String(myDomain));
-    client.println("Content-Length: " + String(Data.length()+imageFile.length()));
+    client.println("Content-Length: " + String(Data.length() + imageFile.length()));
     client.println("Content-Type: application/x-www-form-urlencoded");
     client.println();
     
     client.print(Data);
     int Index;
-    for (Index = 0; Index < imageFile.length(); Index = Index+1000) {
-      client.print(imageFile.substring(Index, Index+1000));
+    for (Index = 0; Index < imageFile.length(); Index = Index + 1000) {
+      client.print(imageFile.substring(Index, Index + 1000));
     }
     
     Serial.println("Waiting for response.");
-    long int StartTime=millis();
+    long int StartTime = millis();
     while (!client.available()) {
       Serial.print(".");
       delay(100);
-      if ((StartTime+waitingTime) < millis()) {
+      if ((StartTime + waitingTime) < millis()) {
         Serial.println();
         Serial.println("No response.");
-        //If you have no response, maybe need a greater value of waitingTime
         break;
       }
     }
@@ -166,37 +174,32 @@ void saveCapturedImage() {
   client.stop();
 }
 
-//https://github.com/zenmanenergy/ESP8266-Arduino-Examples/
-String urlencode(String str)
-{
-    String encodedString="";
-    char c;
-    char code0;
-    char code1;
-    char code2;
-    for (int i =0; i < str.length(); i++){
-      c=str.charAt(i);
-      if (c == ' '){
-        encodedString+= '+';
-      } else if (isalnum(c)){
-        encodedString+=c;
-      } else{
-        code1=(c & 0xf)+'0';
-        if ((c & 0xf) >9){
-            code1=(c & 0xf) - 10 + 'A';
-        }
-        c=(c>>4)&0xf;
-        code0=c+'0';
-        if (c > 9){
-            code0=c - 10 + 'A';
-        }
-        code2='\0';
-        encodedString+='%';
-        encodedString+=code0;
-        encodedString+=code1;
-        //encodedString+=code2;
+String urlencode(String str) {
+  String encodedString = "";
+  char c;
+  char code0;
+  char code1;
+  for (int i = 0; i < str.length(); i++) {
+    c = str.charAt(i);
+    if (c == ' ') {
+      encodedString += '+';
+    } else if (isalnum(c)) {
+      encodedString += c;
+    } else {
+      code1 = (c & 0xf) + '0';
+      if ((c & 0xf) > 9) {
+        code1 = (c & 0xf) - 10 + 'A';
       }
-      yield();
+      c = (c >> 4) & 0xf;
+      code0 = c + '0';
+      if (c > 9) {
+        code0 = c - 10 + 'A';
+      }
+      encodedString += '%';
+      encodedString += code0;
+      encodedString += code1;
     }
-    return encodedString;
+    yield();
+  }
+  return encodedString;
 }
