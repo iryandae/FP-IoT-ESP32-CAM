@@ -142,9 +142,11 @@ void saveCapturedImage() {
       if (i % 3 == 0) imageFile += urlencode(String(output));
     }
 
+    // Release the frame buffer immediately after encoding
+    esp_camera_fb_return(fb);
+
     // Construct data payload
     String Data = myFilename + mimeType + myImage;
-    esp_camera_fb_return(fb); // Release the buffer after encoding
 
     Serial.println("Send a captured image to Google Drive.");
     
@@ -183,7 +185,6 @@ void saveCapturedImage() {
   }
   client.stop();
 }
-
 
 String urlencode(String str) {
   String encodedString = "";
