@@ -34,6 +34,7 @@ int waitingTime = 10000; //Wait 30 seconds to google response.
 #define PCLK_GPIO_NUM     22
 
 #define LED_FLASH_PIN      4 // Pin LED flash
+#define TRIGGER_PIN       14 // GPIO pin for trigger
 
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
@@ -94,13 +95,18 @@ void setup() {
   // Initialize LED flash
   pinMode(LED_FLASH_PIN, OUTPUT);
   digitalWrite(LED_FLASH_PIN, LOW); // Ensure LED is off
+
+  // Configure trigger pin
+  pinMode(TRIGGER_PIN, INPUT_PULLUP);
 }
 
-boolean enviar = true;
-
 void loop() {
-  saveCapturedImage();
-  delay(60000); // Delay 1 minute before next capture
+  // Check if trigger is active (LOW when triggered)
+  if (digitalRead(TRIGGER_PIN) == LOW) {
+    Serial.println("Trigger detected! Capturing image...");
+    saveCapturedImage();
+    delay(1000); // Debounce and avoid continuous captures
+  }
 }
 
 void saveCapturedImage() {
@@ -110,16 +116,16 @@ void saveCapturedImage() {
   
   if (client.connect(myDomain, 443)) {
     Serial.println("Connection successful");
-    
-    camera_fb_t * fb = NULL;
 
     // Turn on LED flash
     digitalWrite(LED_FLASH_PIN, HIGH);
     delay(100); // Allow time for LED to stabilize
 
-    fb = esp_camera_fb_get();  
+    // Capture a new frame
+    camera_fb_t * fb = esp_camera_fb_get();  
     if (!fb) {
       Serial.println("Camera capture failed");
+      digitalWrite(LED_FLASH_PIN, LOW); // Ensure flash is off
       delay(1000);
       ESP.restart();
       return;
@@ -127,32 +133,36 @@ void saveCapturedImage() {
 
     // Turn off LED flash
     digitalWrite(LED_FLASH_PIN, LOW);
-  
+
     char *input = (char *)fb->buf;
     char output[base64_enc_len(3)];
     String imageFile = "";
-    for (int i=0; i<fb->len; i++) {
+    for (int i = 0; i < fb->len; i++) {
       base64_encode(output, (input++), 3);
       if (i % 3 == 0) imageFile += urlencode(String(output));
     }
+
+    // Construct data payload
     String Data = myFilename + mimeType + myImage;
-    
-    esp_camera_fb_return(fb);
-    
+    esp_camera_fb_return(fb); // Release the buffer after encoding
+
     Serial.println("Send a captured image to Google Drive.");
     
+    // Send HTTP request
     client.println("POST " + myScript + " HTTP/1.1");
     client.println("Host: " + String(myDomain));
     client.println("Content-Length: " + String(Data.length() + imageFile.length()));
     client.println("Content-Type: application/x-www-form-urlencoded");
     client.println();
-    
     client.print(Data);
+
+    // Send image in chunks
     int Index;
-    for (Index = 0; Index < imageFile.length(); Index = Index + 1000) {
+    for (Index = 0; Index < imageFile.length(); Index += 1000) {
       client.print(imageFile.substring(Index, Index + 1000));
     }
-    
+
+    // Wait for response
     Serial.println("Waiting for response.");
     long int StartTime = millis();
     while (!client.available()) {
@@ -173,6 +183,7 @@ void saveCapturedImage() {
   }
   client.stop();
 }
+
 
 String urlencode(String str) {
   String encodedString = "";
