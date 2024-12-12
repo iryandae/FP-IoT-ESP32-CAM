@@ -2,24 +2,40 @@
 #include <Adafruit_PN532.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <Adafruit_SSD1306.h>
+
 
 // WiFi credentials
 const char* ssid = "Ibu yang Luhur ITS";
 const char* password = "5027231025";
 
 // Google Apps Script Web App URL
-const String scriptUrl = "https://script.google.com/macros/s/AKfycby2R9DKDXSqZN9YVEeTitLUxhP3CqEuaE8vzjUFoEmAxRu69yX2A5BnCZ54b4mNII_LRw/exec";
+const String scriptUrl = "https://script.google.com/macros/s/AKfycbxhfHjHc0f38BKM1RTwYO5iQ98n95FSPR99DLmfNVgQnv2QURSsN7Uu3jODGfHr6rZFLQ/exec";
 
 // PN532 I2C setup
 #define SDA_PIN 21
 #define SCL_PIN 22
 Adafruit_PN532 nfc(SDA_PIN, SCL_PIN);
 
+// OLED
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+#define SSD1306_I2C_ADDRESS 0x3C
+
+
 // GPIO pin for signaling ESP32-CAM
 #define GPIO_SIGNAL_PIN 25
+#define GREEN_LED_PIN 12   // Green LED pin
+#define RED_LED_PIN 13     // Red LED pin
 
 void setup() {
   Serial.begin(115200);
+
+  pinMode(GREEN_LED_PIN, OUTPUT);
+  pinMode(RED_LED_PIN, OUTPUT);
+  digitalWrite(GREEN_LED_PIN, LOW);
+  digitalWrite(RED_LED_PIN, HIGH);
 
   // Connect to WiFi
   WiFi.begin(ssid, password);
@@ -37,12 +53,34 @@ void setup() {
   Serial.println("PN532 initialized.");
   nfc.SAMConfig();
 
+  // Initialize OLED
+  if (!display.begin(SSD1306_I2C_ADDRESS, 0x3C)) { // Default OLED I2C address is 0x3C
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;);
+  }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("OLED Initialized");
+  display.display();
+
     // Configure GPIO signaling pin
   pinMode(GPIO_SIGNAL_PIN, OUTPUT);
   digitalWrite(GPIO_SIGNAL_PIN, LOW); // Ensure pin is LOW initially
+
+    // Configure LED GPIO pins
 }
 
 void loop() {
+  digitalWrite(RED_LED_PIN, HIGH);
+  digitalWrite(GREEN_LED_PIN, LOW);
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Tempelkan Kartu");
+  display.display();
+
   uint8_t success;
   uint8_t uid[] = {0, 0, 0, 0, 0, 0, 0};
   uint8_t uidLength;
@@ -52,6 +90,15 @@ void loop() {
 
   if (success) {
     Serial.println("Card detected!");
+
+    // Turn on Green LED to indicate success
+    digitalWrite(GREEN_LED_PIN, HIGH);
+    digitalWrite(RED_LED_PIN, LOW); // Ensure Red LED is OFF
+
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Kartu Terdeteksi");
+    display.display();
 
     // Convert UID to string
     String cardId = "";

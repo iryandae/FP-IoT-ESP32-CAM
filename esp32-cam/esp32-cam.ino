@@ -8,7 +8,7 @@
 const char* ssid     = "Ibu yang Luhur ITS";   //your network SSID
 const char* password = "5027231025";          //your network password
 const char* myDomain = "script.google.com";
-String myScript = "https://script.google.com/macros/s/AKfycbyvjumWB8ioxsJGyRL6nzFANWOxTq6R0rbTHYYn08WXKlBSQZbMcv4Gvp1Yo9uOKBcO/exec"; //Replace with your own url
+String myScript = "https://script.google.com/macros/s/AKfycbw7XRo6ZuVh8HyNts2wBLnoXE8JSOmc5GMGSc8jjpZw-r_hxddIGIBZHnbCByVS06br/exec"; //Replace with your own url
 String myFilename = "filename=ESP32-CAM.jpg"; // Folder Name
 String mimeType = "&mimetype=image/jpeg";
 String myImage = "&data=";
@@ -142,9 +142,10 @@ void saveCapturedImage() {
       if (i % 3 == 0) imageFile += urlencode(String(output));
     }
 
+    esp_camera_fb_return(fb); // Release the buffer after encoding
+    
     // Construct data payload
     String Data = myFilename + mimeType + myImage;
-    esp_camera_fb_return(fb); // Release the buffer after encoding
 
     Serial.println("Send a captured image to Google Drive.");
     
